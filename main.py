@@ -22,18 +22,10 @@ def get_value(m, start_pos, size):
 
 
 def main():
-    # with open("tickers.json", "r") as tickers_file:
-    #     tickers = json.load(tickers_file)
-    # print(tickers)
-    #
-    # earnings
-    new_list = []
-
     with open("DIABLO.EXE", 'rb') as f:
         size_bytes = os.fstat(f.fileno()).st_size
         print(f"file size: {size_bytes}\n")
         m = mmap.mmap(f.fileno(), length=size_bytes, access=mmap.ACCESS_READ)
-        # arr = np.frombuffer(m,np.dtype('int32'), offset=0)
 
     # monster data
     monster_package = [("animation_size", 4),
