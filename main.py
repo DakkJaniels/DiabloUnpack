@@ -115,12 +115,8 @@ def get_resists(value):
         resistance_string = resistance_string.strip("|")
     return resistance_string
 
-def main():
-    with open("DIABLO.EXE", 'rb') as f:
-        size_bytes = os.fstat(f.fileno()).st_size
-        print(f"file size: {size_bytes}\n")
-        m = mmap.mmap(f.fileno(), length=size_bytes, access=mmap.ACCESS_READ)
 
+def convert_monster_data(m):
     # monster data
     monster_package = [("animation_size", 4),
                        ("seeding_size", 4),
@@ -234,7 +230,7 @@ def main():
     monster_dict = {}
     cur_address = monster_start
     monster_table = []
-    for monster_address in range(monster_start, monster_start+monster_size * monster_count, monster_size):
+    for monster_address in range(monster_start, monster_start + monster_size * monster_count, monster_size):
         monster_dict.clear()
         cur_address = monster_address
         # pull memory info for single monster
@@ -245,9 +241,12 @@ def main():
         # print(monster_dict["animation_pointer"])
         monster_row = [
             f'P_("monster", "{get_string(m, monster_dict["monster_name_pointer"] - mem_offset)}")',
-            f'\"{get_string(m, monster_dict["animation_pointer"] - mem_offset)}\"' if monster_dict["animation_pointer"] != 0 else "nullptr",
-            f'\"{get_string(m, monster_dict["sounds_pointer"] - mem_offset)}\"' if monster_dict["sounds_pointer"] != 0 else "nullptr",
-            f'\"{get_string(m, monster_dict["color_trn_pointer"] - mem_offset)}\"' if monster_dict["color_trn_pointer"] != 0 else "nullptr",
+            f'\"{get_string(m, monster_dict["animation_pointer"] - mem_offset)}\"' if monster_dict[
+                                                                                          "animation_pointer"] != 0 else "nullptr",
+            f'\"{get_string(m, monster_dict["sounds_pointer"] - mem_offset)}\"' if monster_dict[
+                                                                                       "sounds_pointer"] != 0 else "nullptr",
+            f'\"{get_string(m, monster_dict["color_trn_pointer"] - mem_offset)}\"' if monster_dict[
+                                                                                          "color_trn_pointer"] != 0 else "nullptr",
             monster_dict["animation_size"],
             monster_dict["seeding_size"],
             "true" if monster_dict["trigger_flag_second_attack"] else "false",
@@ -283,116 +282,182 @@ def main():
         monster_table.append(monster_row)
 
     for row in monster_table:
-        temp_string ="{"
+        temp_string = "{"
         temp_row = [str(int) for int in row]
         x = ", ".join(temp_row)
         temp_string += x
-        temp_string +="},"
+        temp_string += "},"
         print(temp_string)
 
 
-    # for key in monster_dict:
-    #
-    #     print(f"{key}: {(monster_dict[key])}")
-    #     pointer_list = ["animation_pointer", "sounds_pointer", "color_trn_pointer", "monster_name_pointer"]
-    #     resistance_list = ["resistances_immunities_norm_nm", "resistances_immunities_hell"]
-    #     if key in pointer_list and monster_dict[key] != 0:
-    #         address = monster_dict[key] - mem_offset
-    #         temp_string = ""
-    #         while m[address] != 0:
-    #             temp_string = temp_string + chr(m[address])
-    #             address += 1
-    #         print(f"\t{temp_string}")
-    #     elif key in resistance_list:
-    #
-    #         RESIST_MAGIC = 1 << 0
-    #         RESIST_FIRE = 1 << 1
-    #         RESIST_LIGHTNING = 1 << 2
-    #         IMMUNE_MAGIC = 1 << 3
-    #         IMMUNE_FIRE = 1 << 4
-    #         IMMUNE_LIGHTNING = 1 << 5
-    #         IMMUNE_NULL_40 = 1 << 6
-    #         IMMUNE_ACID = 1 << 7
-    #
-    #         resistance_string = ""
-    #         res = monster_dict[key]
-    #         if ((res & (
-    #                 RESIST_MAGIC | RESIST_FIRE | RESIST_LIGHTNING | IMMUNE_MAGIC | IMMUNE_FIRE | IMMUNE_LIGHTNING | IMMUNE_NULL_40 | IMMUNE_ACID)) == 0):
-    #             resistance_string = "0"
-    #
-    #         else:
-    #             if ((res & RESIST_MAGIC) != 0):
-    #                 resistance_string += "RESIST_MAGIC | "
-    #             if ((res & RESIST_FIRE) != 0):
-    #                 resistance_string += "RESIST_FIRE | "
-    #             if ((res & RESIST_LIGHTNING) != 0):
-    #                 resistance_string += "RESIST_LIGHTNING | "
-    #             if ((res & IMMUNE_MAGIC) != 0):
-    #                 resistance_string += "IMMUNE_MAGIC | "
-    #             if ((res & IMMUNE_FIRE) != 0):
-    #                 resistance_string += "IMMUNE_FIRE | "
-    #             if ((res & IMMUNE_LIGHTNING) != 0):
-    #                 resistance_string += "IMMUNE_LIGHTNING | "
-    #             if ((res & IMMUNE_NULL_40) != 0):
-    #                 resistance_string += "IMMUNE_NULL_40 | "
-    #             if ((res & IMMUNE_ACID) != 0):
-    #                 resistance_string += "IMMUNE_ACID"
-    #             resistance_string = resistance_string.strip()
-    #             resistance_string = resistance_string.strip("|")
-    #         print(resistance_string)
-    #     elif key == "mAi":
-    #         print(monster_ai_list[monster_dict[key]])
-    #     elif key == "mFlags" and monster_dict[key] != 0:
-    #         mflag_string = ""
-    #         mflag = monster_dict[key]
-    #         if ((mflag & MFLAG_HIDDEN) != 0):
-    #             mflag_string += "MFLAG_HIDDEN | "
-    #         if ((mflag & MFLAG_LOCK_ANIMATION) != 0):
-    #             mflag_string += "MFLAG_LOCK_ANIMATION | "
-    #         if ((mflag & MFLAG_ALLOW_SPECIAL) != 0):
-    #             mflag_string += "MFLAG_ALLOW_SPECIAL | "
-    #         if ((mflag & MFLAG_NOHEAL) != 0):
-    #             mflag_string += "MFLAG_NOHEAL | "
-    #         if ((mflag & MFLAG_TARGETS_MONSTER) != 0):
-    #             mflag_string += "MFLAG_TARGETS_MONSTER | "
-    #         if ((mflag & MFLAG_GOLEM) != 0):
-    #             mflag_string += "MFLAG_GOLEM | "
-    #         if ((mflag & MFLAG_QUEST_COMPLETE) != 0):
-    #             mflag_string += "MFLAG_QUEST_COMPLETE | "
-    #         if ((mflag & MFLAG_KNOCKBACK) != 0):
-    #             mflag_string += "MFLAG_KNOCKBACK | "
-    #         if ((mflag & MFLAG_SEARCH) != 0):
-    #             mflag_string += "MFLAG_SEARCH | "
-    #         if ((mflag & MFLAG_CAN_OPEN_DOOR) != 0):
-    #             mflag_string += "MFLAG_CAN_OPEN_DOOR | "
-    #         if ((mflag & MFLAG_NO_ENEMY) != 0):
-    #             mflag_string += "MFLAG_NO_ENEMY | "
-    #         if ((mflag & MFLAG_BERSERK) != 0):
-    #             mflag_string += "MFLAG_BERSERK | "
-    #         if ((mflag & MFLAG_NOLIFESTEAL) != 0):
-    #             mflag_string += "MFLAG_NOLIFESTEAL | "
-    #         mflag_string = mflag_string.strip()
-    #         mflag_string = mflag_string.strip("|")
-    #         print(mflag_string)
-    #     elif key == "monster_type":
-    #         print(monster_class_list[monster_dict[key]])
-    #     elif key == "color_trn_pointer" and monster_dict[key] == 0:
-    #         print("nullptr")
-    #     elif key in bool_list:
-    #         value = monster_dict[key]
-    #         if value:
-    #             print("true")
-    #         else:
-    #             print("false")
-    #
-    # # start_pos = 0x00096C78
-    # end_pos = start_pos + 1
-    # chunk = m[start_pos:end_pos]
-    # print(chunk)
-    # value_array = get_value(m, start_pos, 1)
-    # print(value_array)
-    # value = value_array[0]
-    # print(hex(value))
+def get_affix_type(m, type):
+    affix_type = {'IPL_TOHIT': 0x0, 'IPL_TOHIT_CURSE': 0x1, 'IPL_DAMP': 0x2, 'IPL_DAMP_CURSE': 0x3,
+                  'IPL_TOHIT_DAMP': 0x4, 'IPL_TOHIT_DAMP_CURSE': 0x5, 'IPL_ACP': 0x6, 'IPL_ACP_CURSE': 0x7,
+                  'IPL_FIRERES': 0x8, 'IPL_LIGHTRES': 0x9, 'IPL_MAGICRES': 0xA, 'IPL_ALLRES': 0xB, 'IPL_SPLCOST': 0xC,
+                  'IPL_SPLDUR': 0xD, 'IPL_SPLLVLADD': 0xE, 'IPL_CHARGES': 0xF, 'IPL_FIREDAM': 0x10,
+                  'IPL_LIGHTDAM': 0x11, 'IPL_STR': 0x13, 'IPL_STR_CURSE': 0x14, 'IPL_MAG': 0x15, 'IPL_MAG_CURSE': 0x16,
+                  'IPL_DEX': 0x17, 'IPL_DEX_CURSE': 0x18, 'IPL_VIT': 0x19, 'IPL_VIT_CURSE': 0x1A, 'IPL_ATTRIBS': 0x1B,
+                  'IPL_ATTRIBS_CURSE': 0x1C, 'IPL_GETHIT_CURSE': 0x1D, 'IPL_GETHIT': 0x1E, 'IPL_LIFE': 0x1F,
+                  'IPL_LIFE_CURSE': 0x20, 'IPL_MANA': 0x21, 'IPL_MANA_CURSE': 0x22, 'IPL_DUR': 0x23,
+                  'IPL_DUR_CURSE': 0x24, 'IPL_INDESTRUCTIBLE': 0x25, 'IPL_LIGHT': 0x26, 'IPL_LIGHT_CURSE': 0x27,
+                  'IPL_MULT_ARROWS': 0x29, 'IPL_FIRE_ARROWS': 0x2A, 'IPL_LIGHT_ARROWS': 0x2B, 'IPL_INVCURS': 0x2C,
+                  'IPL_THORNS': 0x2D, 'IPL_NOMANA': 0x2E, 'IPL_NOHEALPLR': 0x2F, 'IPL_FIREBALL': 0x32,
+                  'IPL_ABSHALFTRAP': 0x34, 'IPL_KNOCKBACK': 0x35, 'IPL_NOHEALMON': 0x36, 'IPL_STEALMANA': 0x37,
+                  'IPL_STEALLIFE': 0x38, 'IPL_TARGAC': 0x39, 'IPL_FASTATTACK': 0x3A, 'IPL_FASTRECOVER': 0x3B,
+                  'IPL_FASTBLOCK': 0x3C, 'IPL_DAMMOD': 0x3D, 'IPL_RNDARROWVEL': 0x3E, 'IPL_SETDAM': 0x3F,
+                  'IPL_SETDUR': 0x40, 'IPL_NOMINSTR': 0x41, 'IPL_SPELL': 0x42, 'IPL_FASTSWING': 0x43,
+                  'IPL_ONEHAND': 0x44, 'IPL_3XDAMVDEM': 0x45, 'IPL_ALLRESZERO': 0x46, 'IPL_DRAINLIFE': 0x48,
+                  'IPL_RNDSTEALLIFE': 0x49, 'IPL_INFRAVISION': 0x4A, 'IPL_SETAC': 0x4B, 'IPL_ADDACLIFE': 0x4C,
+                  'IPL_ADDMANAAC': 0x4D, 'IPL_FIRERESCLVL': 0x4E, 'IPL_AC_CURSE': 0x4F, 'IPL_FIRERES_CURSE': 0x50,
+                  'IPL_LIGHTRES_CURSE': 0x51, 'IPL_MAGICRES_CURSE': 0x52, 'IPL_ALLRES_CURSE': 0x53,
+                  'IPL_DEVASTATION': 0x54, 'IPL_DECAY': 0x55, 'IPL_PERIL': 0x56, 'IPL_JESTERS': 0x57,
+                  'IPL_CRYSTALLINE': 0x58, 'IPL_DOPPELGANGER': 0x59, 'IPL_ACDEMON': 0x5A, 'IPL_ACUNDEAD': 0x5B,
+                  'IPL_MANATOLIFE': 0x5C, 'IPL_LIFETOMANA': 0x5D, 'IPL_INVALID': -1}
+    for key in affix_type.keys():
+        if type == affix_type[key]:
+            return key
+    return "FAIL"
+
+
+def get_affix_itype(value):
+    itypes = {'PLT_MISC': 0x1, 'PLT_BOW': 0x10, 'PLT_STAFF': 0x100, 'PLT_WEAP': 0x1000, 'PLT_SHLD': 0x10000,
+              'PLT_ARMO': 0x100000}
+
+    itype_string = ""
+
+    for itype in itypes.keys():
+        if (itypes[itype] & value) != 0:
+            itype_string += f"{itype} | "
+    itype_string = itype_string.strip()
+    itype_string = itype_string.strip("|")
+    return itype_string
+
+
+def convert_exclusive_flag(value, flag_dict):
+    temp_string = ""
+    for key in flag_dict.keys():
+        if flag_dict[key] == value:
+            return key
+    return "fail"
+
+def twos_complement(hexstr,bits):
+    value = int(hexstr)
+    if value & (1 << (bits-1)):
+        value -= 1 << bits
+    return value
+
+def convert_affix_data(m):
+    # affix data
+    affix_package = [("ptr_PLName", 4),
+                     ("PLPower", 4),
+                     ("PLParam1", 4),
+                     ("PLParam2", 4),
+                     ("PLMinLvl", 4),
+                     ("PLIType", 4),
+                     ("PLGOE", 4),
+                     ("PLDouble", 4),
+                     ("PLOk", 4),
+                     ("PLMinVal", 4),
+                     ("PLMaxVal", 4),
+                     ("PLMultVal", 4),
+                     ]
+
+    affix_item_type = [
+        "PLT_MISC",  # = 0x1,
+        "PLT_BOW",  # = 0x10,
+        "PLT_STAFF",  # = 0x100,
+        "PLT_WEAP",  # = 0x1000,
+        "PLT_SHLD",  # = 0x10000,
+        "PLT_ARMO",  # = 0x100000,
+    ]
+
+    GOE_ANY = 0x0
+    GOE_EVIL = 0x01
+    GOE_GOOD = 0x10
+
+    affix_goe_list = [
+        "GOE_ANY",
+        "GOE_EVIL",
+        "GOE_GOOD",
+    ]
+    affix_type = {'IPL_TOHIT': 0x0, 'IPL_TOHIT_CURSE': 0x1, 'IPL_DAMP': 0x2, 'IPL_DAMP_CURSE': 0x3,
+                  'IPL_TOHIT_DAMP': 0x4, 'IPL_TOHIT_DAMP_CURSE': 0x5, 'IPL_ACP': 0x6, 'IPL_ACP_CURSE': 0x7,
+                  'IPL_FIRERES': 0x8, 'IPL_LIGHTRES': 0x9, 'IPL_MAGICRES': 0xA, 'IPL_ALLRES': 0xB, 'IPL_SPLCOST': 0xC,
+                  'IPL_SPLDUR': 0xD, 'IPL_SPLLVLADD': 0xE, 'IPL_CHARGES': 0xF, 'IPL_FIREDAM': 0x10,
+                  'IPL_LIGHTDAM': 0x11, 'IPL_STR': 0x13, 'IPL_STR_CURSE': 0x14, 'IPL_MAG': 0x15, 'IPL_MAG_CURSE': 0x16,
+                  'IPL_DEX': 0x17, 'IPL_DEX_CURSE': 0x18, 'IPL_VIT': 0x19, 'IPL_VIT_CURSE': 0x1A, 'IPL_ATTRIBS': 0x1B,
+                  'IPL_ATTRIBS_CURSE': 0x1C, 'IPL_GETHIT_CURSE': 0x1D, 'IPL_GETHIT': 0x1E, 'IPL_LIFE': 0x1F,
+                  'IPL_LIFE_CURSE': 0x20, 'IPL_MANA': 0x21, 'IPL_MANA_CURSE': 0x22, 'IPL_DUR': 0x23,
+                  'IPL_DUR_CURSE': 0x24, 'IPL_INDESTRUCTIBLE': 0x25, 'IPL_LIGHT': 0x26, 'IPL_LIGHT_CURSE': 0x27,
+                  'IPL_MULT_ARROWS': 0x29, 'IPL_FIRE_ARROWS': 0x2A, 'IPL_LIGHT_ARROWS': 0x2B, 'IPL_INVCURS': 0x2C,
+                  'IPL_THORNS': 0x2D, 'IPL_NOMANA': 0x2E, 'IPL_NOHEALPLR': 0x2F, 'IPL_FIREBALL': 0x32,
+                  'IPL_ABSHALFTRAP': 0x34, 'IPL_KNOCKBACK': 0x35, 'IPL_NOHEALMON': 0x36, 'IPL_STEALMANA': 0x37,
+                  'IPL_STEALLIFE': 0x38, 'IPL_TARGAC': 0x39, 'IPL_FASTATTACK': 0x3A, 'IPL_FASTRECOVER': 0x3B,
+                  'IPL_FASTBLOCK': 0x3C, 'IPL_DAMMOD': 0x3D, 'IPL_RNDARROWVEL': 0x3E, 'IPL_SETDAM': 0x3F,
+                  'IPL_SETDUR': 0x40, 'IPL_NOMINSTR': 0x41, 'IPL_SPELL': 0x42, 'IPL_FASTSWING': 0x43,
+                  'IPL_ONEHAND': 0x44, 'IPL_3XDAMVDEM': 0x45, 'IPL_ALLRESZERO': 0x46, 'IPL_DRAINLIFE': 0x48,
+                  'IPL_RNDSTEALLIFE': 0x49, 'IPL_INFRAVISION': 0x4A, 'IPL_SETAC': 0x4B, 'IPL_ADDACLIFE': 0x4C,
+                  'IPL_ADDMANAAC': 0x4D, 'IPL_FIRERESCLVL': 0x4E, 'IPL_AC_CURSE': 0x4F, 'IPL_FIRERES_CURSE': 0x50,
+                  'IPL_LIGHTRES_CURSE': 0x51, 'IPL_MAGICRES_CURSE': 0x52, 'IPL_ALLRES_CURSE': 0x53,
+                  'IPL_DEVASTATION': 0x54, 'IPL_DECAY': 0x55, 'IPL_PERIL': 0x56, 'IPL_JESTERS': 0x57,
+                  'IPL_CRYSTALLINE': 0x58, 'IPL_DOPPELGANGER': 0x59, 'IPL_ACDEMON': 0x5A, 'IPL_ACUNDEAD': 0x5B,
+                  'IPL_MANATOLIFE': 0x5C, 'IPL_LIFETOMANA': 0x5D, 'IPL_INVALID': -1}
+
+    affix_goe_list = {"GOE_ANY": 0, "GOE_EVIL": 0x01, "GOE_GOOD": 0x10}
+
+    # print(monster_dict)
+
+    mem_offset = 0x402200
+    affix_start = 0x0007AAF8
+    affix_size = 48
+    affix_count = 180
+
+    affix_dict = {}
+    cur_address = affix_start
+    affix_table = []
+    for affix_address in range(affix_start, affix_start + affix_size * affix_count, affix_size):
+        affix_dict.clear()
+        cur_address = affix_address
+        # pull memory info for single affix
+        for name, length in affix_package:
+            affix_dict[name] = get_value(m, cur_address, length)
+            cur_address = cur_address + length
+        # place memory info in correct order for row
+        affix_row = [
+            f'N_("{get_string(m, affix_dict["ptr_PLName"] - mem_offset)}")',
+            f'{{{get_affix_type(m, affix_dict["PLPower"])}',
+            f'{affix_dict["PLParam1"]}',
+            f'{affix_dict["PLParam2"]} }}',
+            affix_dict["PLMinLvl"],
+            get_affix_itype(affix_dict["PLIType"]),
+            convert_exclusive_flag(affix_dict["PLGOE"], affix_goe_list),
+            "true" if affix_dict["PLDouble"] else "false",
+            "true" if affix_dict["PLOk"] else "false",
+            affix_dict["PLMinVal"],
+            affix_dict["PLMaxVal"],
+            # str(affix_dict["PLMultVal"])
+            twos_complement(str(affix_dict["PLMultVal"]),32),
+        ]
+        # print(monster_row)
+        affix_table.append(affix_row)
+
+    for row in affix_table:
+        temp_string = "{"
+        temp_row = [str(int) for int in row]
+        x = ", ".join(temp_row)
+        temp_string += x
+        temp_string += "},"
+        print(temp_string)
+
+
+def main():
+    with open("DIABLO.EXE", 'rb') as f:
+        size_bytes = os.fstat(f.fileno()).st_size
+        print(f"file size: {size_bytes}\n")
+        m = mmap.mmap(f.fileno(), length=size_bytes, access=mmap.ACCESS_READ)
+
+    # convert_monster_data(m)
+    convert_affix_data(m)
 
 
 # Press the green button in the gutter to run the script.
