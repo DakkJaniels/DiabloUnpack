@@ -3,23 +3,26 @@ import os
 import struct
 
 
-def get_value(m, start_pos, size):
+def get_value(m, start_pos, size, is_signed=False):
     # note - last value is not pulled
     chunk = m[start_pos:start_pos + size]
     unpack_string = "<"
     if size == 1:
-        unpack_string = unpack_string + "B"
+        unpack_string = (unpack_string + "B")
     elif size == 2:
-        unpack_string = unpack_string + "H"
+        unpack_string = (unpack_string + "H")
     elif size == 4:
-        unpack_string = unpack_string + "I"
+        unpack_string = (unpack_string + "I")
     elif size == 8:
-        unpack_string = unpack_string + "Q"
+        unpack_string = (unpack_string + "Q")
     else:
         print("error, get value size incorrect")
         return 0
     # print(unpack_string)
-    return struct.unpack(unpack_string, chunk)[0]
+    value = struct.unpack(unpack_string, chunk)[0]
+    if is_signed:
+        value = twos_complement(str(value), size * 8)
+    return value
 
 
 def get_string(m, address):
@@ -75,6 +78,8 @@ def get_mflags(value):
         mflag_string += "MFLAG_NOLIFESTEAL | "
     mflag_string = mflag_string.strip()
     mflag_string = mflag_string.strip("|")
+    if mflag_string == "":
+        mflag_string = 0
     return (mflag_string)
 
 
@@ -205,7 +210,7 @@ def convert_monster_data(m):
         "AI_PSYCHORB",
         "AI_NECROMORB",
         "AI_BONEDEMON",
-        "AI_INVALID"
+        # "AI_INVALID" = -1
     ]
 
     monster_class_list = [
@@ -284,7 +289,7 @@ def convert_monster_data(m):
     for row in monster_table:
         temp_string = "{"
         temp_row = [str(int) for int in row]
-        x = ", ".join(temp_row)
+        x = ",; ".join(temp_row)
         temp_string += x
         temp_string += "},"
         print(temp_string)
@@ -339,6 +344,7 @@ def convert_exclusive_flag(value, flag_dict):
         if flag_dict[key] == value:
             return key
     return "fail"
+
 
 def convert_bit_flag(value, flag_dict):
     temp_string = ""
@@ -441,9 +447,8 @@ def convert_affix_data(m):
             convert_exclusive_flag(affix_dict["PLGOE"], affix_goe_list),
             "true" if affix_dict["PLDouble"] else "false",
             "true" if affix_dict["PLOk"] else "false",
-            affix_dict["PLMinVal"],
-            affix_dict["PLMaxVal"],
-            # str(affix_dict["PLMultVal"])
+            twos_complement(str(affix_dict["PLMinVal"]), 32),
+            twos_complement(str(affix_dict["PLMaxVal"]), 32),
             twos_complement(str(affix_dict["PLMultVal"]), 32),
         ]
         # print(monster_row)
@@ -452,7 +457,7 @@ def convert_affix_data(m):
     for row in affix_table:
         temp_string = "{"
         temp_row = [str(int) for int in row]
-        x = ", ".join(temp_row)
+        x = ",; ".join(temp_row)
         temp_string += x
         temp_string += "},"
         print(temp_string)
@@ -502,11 +507,21 @@ def convert_unique_data(m):
                  'UITYPE_55': 0x37, 'UITYPE_AMULET': 0x38, 'UITYPE_SKCROWN': 0x39, 'UITYPE_INFRARING': 0x3A,
                  'UITYPE_OPTAMULET': 0x3B, 'UITYPE_TRING': 0x3C, 'UITYPE_HARCREST': 0x3D, 'UITYPE_MAPOFDOOM': 0x3E,
                  'UITYPE_ELIXIR': 0x3F, 'UITYPE_ARMOFVAL': 0x40, 'UITYPE_STEELVEIL': 0x41, 'UITYPE_GRISWOLD': 0x42,
-                 'UITYPE_LGTFORGE': 0x43, 'UITYPE_LAZSTAFF': 0x44, 'UITYPE_INVALID': -1}
+                 'UITYPE_LGTFORGE': 0x43, 'UITYPE_LAZSTAFF': 0x44, 'UITYPE_NUMSWORD': 102, 'UITYPE_MAJAMULET': 103,
+                 'UITYPE_WARAXE': 104, 'UITYPE_HEAVYXBOW': 105, 'UITYPE_MALLORNBOW': 106, 'UITYPE_WARFLAIL': 107,
+                 'UITYPE_WARHELM': 108, 'UITYPE_NUMSHIELD': 109, 'UITYPE_ELVISHSBOW': 111, 'UITYPE_MITHCHAINMAIL': 117,
+                 'UITYPE_ELVENBLADE': 118, 'UITYPE_MITHRILSHIELD': 119, 'UITYPE_ELVENBOW': 120,
+                 'UITYPE_MITHRILHELM': 121, 'UITYPE_MAJRING': 122, 'UITYPE_LESSRING': -128, 'UITYPE_NORMRING': -127,
+                 'UITYPE_LCAP': -111,
+                 'UITYPE_CHAINSHIRT': -112, 'UITYPE_FULLHELM': -109, 'UITYPE_SDSCALE': -107, 'UITYPE_GREATFLAIL': -106,
+                 'UITYPE_SHBATTLEBOW': -104, 'UITYPE_DWARVENSHIELD': -64, 'UITYPE_LEATHERARMOR': -63,
+                 'UITYPE_MAGEROBE': -62, 'UITYPE_SCALEMAIL': -61, 'UITYPE_HAUBERK': -60, 'UITYPE_DWARVENAXE': -59,
+                 'UITYPE_LONGKNIFE': -58, 'UITYPE_CSABRE': -57, 'UITYPE_WOODAXE': -56, 'UITYPE_SHWARBOW': -55,
+                 'UITYPE_MINRING': -54, 'UITYPE_INVALID': -1}
 
     mem_offset = 0x402200
     mem_start = 0x0007CCB8
-    block_size = 76
+    block_size = 84
     block_count = 91
 
     conv_dict = {}
@@ -516,39 +531,43 @@ def convert_unique_data(m):
         cur_address = mem_address
         # pull memory info for single affix
         for name, length in package:
-            conv_dict[name] = get_value(m, cur_address, length)
+            conv_dict[name] = get_value(m, cur_address,
+                                        length) if name != "UIItemID" else get_value(m, cur_address, length, True)
             cur_address = cur_address + length
         # place memory info in correct order for row
         conv_row = [
             f'N_("{get_string(m, conv_dict["UIName"] - mem_offset)}")',
-            convert_exclusive_flag(conv_dict["UIItemId"], type_dict),
+            convert_exclusive_flag(twos_complement(conv_dict["UIItemId"], 8), type_dict) if convert_exclusive_flag(
+                twos_complement(conv_dict["UIItemId"], 8),
+                type_dict) != "fail" else
+            conv_dict["UIItemId"],
             conv_dict["UIMinLvl"],
             conv_dict["UINumPL"],
             conv_dict["UIValue"],
 
             f'{{ {{ {get_affix_type(m, conv_dict["ItemPower[0].type"])}',
-            f'{conv_dict["ItemPower[0].param1"]}',
-            f'{conv_dict["ItemPower[0].param2"]} }}',
+            f'{twos_complement(conv_dict["ItemPower[0].param1"], 32)}',
+            f'{twos_complement(conv_dict["ItemPower[0].param2"], 32)} }}',
 
             f'{{ {get_affix_type(m, conv_dict["ItemPower[1].type"])}',
-            f'{conv_dict["ItemPower[1].param1"]}',
-            f'{conv_dict["ItemPower[1].param2"]} }}',
+            f'{twos_complement(conv_dict["ItemPower[1].param1"], 32)}',
+            f'{twos_complement(conv_dict["ItemPower[1].param2"], 32)} }}',
 
             f'{{ {get_affix_type(m, conv_dict["ItemPower[2].type"])}',
-            f'{conv_dict["ItemPower[2].param1"]}',
-            f'{conv_dict["ItemPower[2].param2"]} }}',
+            f'{twos_complement(conv_dict["ItemPower[2].param1"], 32)}',
+            f'{twos_complement(conv_dict["ItemPower[2].param2"], 32)} }}',
 
             f'{{ {get_affix_type(m, conv_dict["ItemPower[3].type"])}',
-            f'{conv_dict["ItemPower[3].param1"]}',
-            f'{conv_dict["ItemPower[3].param2"]} }}',
+            f'{twos_complement(conv_dict["ItemPower[3].param1"], 32)}',
+            f'{twos_complement(conv_dict["ItemPower[3].param2"], 32)} }}',
 
             f'{{ {get_affix_type(m, conv_dict["ItemPower[4].type"])}',
-            f'{conv_dict["ItemPower[4].param1"]}',
-            f'{conv_dict["ItemPower[4].param2"]} }}',
+            f'{twos_complement(conv_dict["ItemPower[4].param1"], 32)}',
+            f'{twos_complement(conv_dict["ItemPower[4].param2"], 32)} }}',
 
             f'{{ {get_affix_type(m, conv_dict["ItemPower[5].type"])}',
-            f'{conv_dict["ItemPower[5].param1"]}',
-            f'{conv_dict["ItemPower[5].param2"]} }} }}',
+            f'{twos_complement(conv_dict["ItemPower[5].param1"], 32)}',
+            f'{twos_complement(conv_dict["ItemPower[5].param2"], 32)} }} }}',
         ]
         # print(monster_row)
         conv_table.append(conv_row)
@@ -556,7 +575,7 @@ def convert_unique_data(m):
     for row in conv_table:
         temp_string = "{"
         temp_row = [str(int) for int in row]
-        x = ", ".join(temp_row)
+        x = ",; ".join(temp_row)
         temp_string += x
         temp_string += "},"
         print(temp_string)
@@ -567,9 +586,9 @@ def convert_item_data(m):
     package = [("iRnd", 4),
                ("iClass", 1),
                ("iLoc", 1),
-               ("padding",2),
+               ("padding", 2),
                ("iCurs", 4),
-               ("itype",1),
+               ("itype", 1),
                ("iItemId", 1),
                ("padding2", 2),
                ("iName", 4),
@@ -583,7 +602,7 @@ def convert_item_data(m):
                ("iMinStr", 1),
                ("iMinMag", 1),
                ("iMinDex", 1),
-               ("padding3",1),
+               ("padding3", 1),
                ("iFlags", 4),
                ("iMiscId", 4),
                ("iSpell", 4),
@@ -600,39 +619,53 @@ def convert_item_data(m):
                        'ILOC_INVALID': -1}
     item_cursor_graphic = {'ICURS_POTION_OF_FULL_MANA': 0, 'ICURS_SCROLL_OF': 1, 'ICURS_GOLD_SMALL': 4,
                            'ICURS_GOLD_MEDIUM': 5, 'ICURS_GOLD_LARGE': 6, 'ICURS_RING_OF_TRUTH': 10, 'ICURS_RING': 12,
-                           'ICURS_SPECTRAL_ELIXIR': 15, 'ICURS_GOLDEN_ELIXIR': 17, 'ICURS_EMPYREAN_BAND': 18,
-                           'ICURS_EAR_SORCEROR': 19, 'ICURS_EAR_WARRIOR': 20, 'ICURS_EAR_ROGUE': 21,
-                           'ICURS_BLOOD_STONE': 25, 'ICURS_ELIXIR_OF_VITALITY': 31, 'ICURS_POTION_OF_HEALING': 32,
+                           'ICURS_LES_RING': 13, 'ICURS_NORM_RING': 14, 'ICURS_SPECTRAL_ELIXIR': 15,
+                           'ICURS_GOLDEN_ELIXIR': 17, 'ICURS_EMPYREAN_BAND': 18, 'ICURS_EAR_SORCERER': 19,
+                           'ICURS_EAR_WARRIOR': 20, 'ICURS_EAR_ROGUE': 21, 'ICURS_BLOOD_STONE': 25, 'ICURS_GEM': 26,
+                           'ICURS_OIL': 30, 'ICURS_ELIXIR_OF_VITALITY': 31, 'ICURS_POTION_OF_HEALING': 32,
                            'ICURS_POTION_OF_FULL_REJUVENATION': 33, 'ICURS_ELIXIR_OF_MAGIC': 34,
                            'ICURS_POTION_OF_FULL_HEALING': 35, 'ICURS_ELIXIR_OF_DEXTERITY': 36,
                            'ICURS_POTION_OF_REJUVENATION': 37, 'ICURS_ELIXIR_OF_STRENGTH': 38,
-                           'ICURS_POTION_OF_MANA': 39, 'ICURS_BRAIN': 40, 'ICURS_OPTIC_AMULET': 44, 'ICURS_AMULET': 45,
-                           'ICURS_DAGGER': 51, 'ICURS_BLADE': 56, 'ICURS_BASTARD_SWORD': 57, 'ICURS_MACE': 59,
+                           'ICURS_POTION_OF_MANA': 39, 'ICURS_BRAIN': 40, 'ICURS_CLAW': 41, 'ICURS_OPTIC_AMULET': 44,
+                           'ICURS_AMULET': 45, 'ICURS_MAJ_AMULET': 48, 'ICURS_MORGUL_KNIFE': 50, 'ICURS_DAGGER': 51,
+                           'ICURS_LONG_KNIFE': 54, 'ICURS_BLADE': 56, 'ICURS_BASTARD_SWORD': 57, 'ICURS_MACE': 59,
                            'ICURS_LONG_SWORD': 60, 'ICURS_BROAD_SWORD': 61, 'ICURS_FALCHION': 62,
                            'ICURS_MORNING_STAR': 63, 'ICURS_SHORT_SWORD': 64, 'ICURS_CLAYMORE': 65, 'ICURS_CLUB': 66,
-                           'ICURS_SABRE': 67, 'ICURS_SPIKED_CLUB': 70, 'ICURS_SCIMITAR': 72, 'ICURS_FULL_HELM': 75,
-                           'ICURS_MAGIC_ROCK': 76, 'ICURS_THE_UNDEAD_CROWN': 78, 'ICURS_HELM': 82, 'ICURS_BUCKLER': 83,
+                           'ICURS_SABRE': 67, 'ICURS_SH_SWORD': 68, 'ICURS_SPIKED_CLUB': 70, 'ICURS_SPIKED_CLUB2': 71,
+                           'ICURS_SCIMITAR': 72, 'ICURS_ELVEN_BLADE': 73, 'ICURS_FULL_HELM': 75, 'ICURS_MAGIC_ROCK': 76,
+                           'ICURS_THE_UNDEAD_CROWN': 78, 'ICURS_HELM': 82, 'ICURS_BUCKLER': 83, 'ICRUS_GREAT_HELM': 84,
                            'ICURS_VIEL_OF_STEEL': 85, 'ICURS_BOOK_GREY': 86, 'ICURS_BOOK_RED': 87,
                            'ICURS_BOOK_BLUE': 88, 'ICURS_BLACK_MUSHROOM': 89, 'ICURS_SKULL_CAP': 90, 'ICURS_CAP': 91,
-                           'ICURS_HARLEQUIN_CREST': 93, 'ICURS_CROWN': 95, 'ICURS_MAP_OF_THE_STARS': 96,
-                           'ICURS_FUNGAL_TOME': 97, 'ICURS_GREAT_HELM': 98, 'ICURS_BATTLE_AXE': 101,
-                           'ICURS_HUNTERS_BOW': 102, 'ICURS_FIELD_PLATE': 103, 'ICURS_SMALL_SHIELD': 105,
-                           'ICURS_CLEAVER': 106, 'ICURS_STUDDED_LEATHER_ARMOR': 107, 'ICURS_SHORT_STAFF': 109,
-                           'ICURS_TWO_HANDED_SWORD': 110, 'ICURS_CHAIN_MAIL': 111, 'ICURS_SMALL_AXE': 112,
-                           'ICURS_KITE_SHIELD': 113, 'ICURS_SCALE_MAIL': 114, 'ICURS_SHORT_BOW': 118,
-                           'ICURS_LONG_WAR_BOW': 119, 'ICURS_WAR_HAMMER': 121, 'ICURS_MAUL': 122,
-                           'ICURS_LONG_STAFF': 123, 'ICURS_WAR_STAFF': 124, 'ICURS_TAVERN_SIGN': 126,
+                           'ICURS_HARLEQUIN_CREST': 93, 'ICURS_SHIRT': 94, 'ICURS_CROWN': 95,
+                           'ICURS_MAP_OF_THE_STARS': 96, 'ICURS_FUNGAL_TOME': 97, 'ICURS_GREAT_HELM': 98,
+                           'ICURS_MITHRIL_SHIELD': 100, 'ICURS_BATTLE_AXE': 101, 'ICURS_HUNTERS_BOW': 102,
+                           'ICURS_FIELD_PLATE': 103, 'ICURS_SMALL_SHIELD': 105, 'ICURS_CLEAVER': 106,
+                           'ICURS_STUDDED_LEATHER_ARMOR': 107, 'ICURS_SHORT_STAFF': 109, 'ICURS_TWO_HANDED_SWORD': 110,
+                           'ICURS_CHAIN_MAIL': 111, 'ICURS_SMALL_AXE': 112, 'ICURS_KITE_SHIELD': 113,
+                           'ICURS_SCALE_MAIL': 114, 'ICURS_DWARVEN_SHIELD': 115, 'ICURS_SHORT_BOW': 118,
+                           'ICURS_LONG_BATTLE_BOW': 119, 'ICURS_LONG_WAR_BOW': 120, 'ICURS_WAR_HAMMER': 121,
+                           'ICURS_MAUL': 122, 'ICURS_LONG_STAFF': 123, 'ICURS_WAR_STAFF': 124, 'ICURS_TAVERN_SIGN': 126,
                            'ICURS_HARD_LEATHER_ARMOR': 127, 'ICURS_RAGS': 128, 'ICURS_QUILTED_ARMOR': 129,
-                           'ICURS_FLAIL': 131, 'ICURS_TOWER_SHIELD': 132, 'ICURS_COMPOSITE_BOW': 133,
-                           'ICURS_GREAT_SWORD': 134, 'ICURS_LEATHER_ARMOR': 135, 'ICURS_SPLINT_MAIL': 136,
-                           'ICURS_ROBE': 137, 'ICURS_ANVIL_OF_FURY': 140, 'ICURS_BROAD_AXE': 141,
-                           'ICURS_LARGE_AXE': 142, 'ICURS_GREAT_AXE': 143, 'ICURS_AXE': 144, 'ICURS_LARGE_SHIELD': 147,
-                           'ICURS_GOTHIC_SHIELD': 148, 'ICURS_CLOAK': 149, 'ICURS_CAPE': 150,
+                           'ICURS_WAR_FLAIL': 130, 'ICURS_FLAIL': 131, 'ICURS_TOWER_SHIELD': 132,
+                           'ICURS_COMPOSITE_BOW': 133, 'ICURS_GREAT_SWORD': 134, 'ICURS_LEATHER_ARMOR': 135,
+                           'ICURS_SPLINT_MAIL': 136, 'ICURS_ROBE': 137, 'ICURS_MAGE_ROBES': 138,
+                           'ICURS_CHAIN_SHIRT': 139, 'ICURS_ANVIL_OF_FURY': 140, 'ICURS_BROAD_AXE': 141,
+                           'ICURS_LARGE_AXE': 142, 'ICURS_GREAT_AXE': 143, 'ICURS_AXE': 144, 'ICURS_NUM_SHIELD': 146,
+                           'ICURS_LARGE_SHIELD': 147, 'ICURS_GOTHIC_SHIELD': 148, 'ICURS_CLOAK': 149, 'ICURS_CAPE': 150,
                            'ICURS_FULL_PLATE_MAIL': 151, 'ICURS_GOTHIC_PLATE': 152, 'ICURS_BREAST_PLATE': 153,
-                           'ICURS_RING_MAIL': 154, 'ICURS_STAFF_OF_LAZARUS': 155, 'ICURS_ARKAINES_VALOR': 157,
-                           'ICURS_SHORT_WAR_BOW': 165, 'ICURS_COMPOSITE_STAFF': 166, 'ICURS_SHORT_BATTLE_BOW': 167,
-                           'ICURS_GOLD': 168
-                           }
+                           'ICURS_RING_MAIL': 154, 'ICURS_STAFF_OF_LAZARUS': 155, 'ICURS_WAR_AXE': 156,
+                           'ICURS_ARKAINES_VALOR': 157, 'ICURS_HEAVY_XBOW': 158, 'ICURS_ROMACIL': 160,
+                           'ICURS_DWARVEN_AXE': 163, 'ICURS_MALLORN_BOW': 164, 'ICURS_SHORT_WAR_BOW': 165,
+                           'ICURS_COMPOSITE_STAFF': 166, 'ICURS_SHORT_BATTLE_BOW': 167, 'ICURS_GOLD': 168,
+                           'ICURS_AURIC_AMULET': 180, 'ICURS_RUNE_BOMB': 187, 'ICURS_THEODORE': 188,
+                           'ICURS_TORN_NOTE_1': 189, 'ICURS_TORN_NOTE_2': 190, 'ICURS_TORN_NOTE_3': 191,
+                           'ICURS_RECONSTRUCTED_NOTE': 192, 'ICURS_RUNE_OF_FIRE': 193,
+                           'ICURS_GREATER_RUNE_OF_FIRE': 194, 'ICURS_RUNE_OF_LIGHTNING': 195,
+                           'ICURS_GREATER_RUNE_OF_LIGHTNING': 196, 'ICURS_RUNE_OF_STONE': 197, 'ICURS_GREY_SUIT': 198,
+                           'ICURS_BROWN_SUIT': 199, 'ICURS_BOVINE': 226, 'ICURS_NEW_HELM': 236, 'ICURS_SKULLCAP': 240,
+                           'ICURS_PLATE_MAIL': 243, 'ICURS_GREAT_BLADE': 244, 'ICURS_LONG_BOW': 248,
+                           'ICURS_ELVEN_SH_BOW': 249}
+
     item_type = {'ITYPE_MISC': 0x0, 'ITYPE_SWORD': 0x1, 'ITYPE_AXE': 0x2, 'ITYPE_BOW': 0x3, 'ITYPE_MACE': 0x4,
                  'ITYPE_SHIELD': 0x5, 'ITYPE_LARMOR': 0x6, 'ITYPE_HELM': 0x7, 'ITYPE_MARMOR': 0x8, 'ITYPE_HARMOR': 0x9,
                  'ITYPE_STAFF': 0xA, 'ITYPE_GOLD': 0xB, 'ITYPE_RING': 0xC, 'ITYPE_AMULET': 0xD, 'ITYPE_FOOD': 0xE,
@@ -689,22 +722,41 @@ def convert_item_data(m):
                         'UITYPE_COMPBOW': 0x4, 'UITYPE_WARBOW': 0x5, 'UITYPE_BATTLEBOW': 0x6, 'UITYPE_DAGGER': 0x7,
                         'UITYPE_FALCHION': 0x8, 'UITYPE_CLAYMORE': 0x9, 'UITYPE_BROADSWR': 0xA, 'UITYPE_SABRE': 0xB,
                         'UITYPE_SCIMITAR': 0xC, 'UITYPE_LONGSWR': 0xD, 'UITYPE_BASTARDSWR': 0xE,
-                        'UITYPE_TWOHANDSWR': 0xF, 'UITYPE_GREATSWR': 0x10, 'UITYPE_CLEAVER': 0x11,
-                        'UITYPE_LARGEAXE': 0x12, 'UITYPE_BROADAXE': 0x13, 'UITYPE_SMALLAXE': 0x14,
-                        'UITYPE_BATTLEAXE': 0x15, 'UITYPE_GREATAXE': 0x16, 'UITYPE_MACE': 0x17, 'UITYPE_MORNSTAR': 0x18,
-                        'UITYPE_SPIKCLUB': 0x19, 'UITYPE_MAUL': 0x1A, 'UITYPE_WARHAMMER': 0x1B, 'UITYPE_FLAIL': 0x1C,
-                        'UITYPE_LONGSTAFF': 0x1D, 'UITYPE_SHORTSTAFF': 0x1E, 'UITYPE_COMPSTAFF': 0x1F,
+                        'UITYPE_TWOHANDSWR': 0xF,
+                        'UITYPE_GREATSWR': 0x10, 'UITYPE_CLEAVER': 0x11, 'UITYPE_LARGEAXE': 0x12,
+                        'UITYPE_BROADAXE': 0x13,
+                        'UITYPE_SMALLAXE': 0x14, 'UITYPE_BATTLEAXE': 0x15, 'UITYPE_GREATAXE': 0x16, 'UITYPE_MACE': 0x17,
+                        'UITYPE_MORNSTAR': 0x18, 'UITYPE_SPIKCLUB': 0x19, 'UITYPE_MAUL': 0x1A, 'UITYPE_WARHAMMER': 0x1B,
+                        'UITYPE_FLAIL': 0x1C, 'UITYPE_LONGSTAFF': 0x1D, 'UITYPE_SHORTSTAFF': 0x1E,
+                        'UITYPE_COMPSTAFF': 0x1F,
                         'UITYPE_QUARSTAFF': 0x20, 'UITYPE_WARSTAFF': 0x21, 'UITYPE_SKULLCAP': 0x22, 'UITYPE_HELM': 0x23,
                         'UITYPE_GREATHELM': 0x24, 'UITYPE_CROWN': 0x25, 'UITYPE_38': 0x26, 'UITYPE_RAGS': 0x27,
                         'UITYPE_STUDARMOR': 0x28, 'UITYPE_CLOAK': 0x29, 'UITYPE_ROBE': 0x2A, 'UITYPE_CHAINMAIL': 0x2B,
                         'UITYPE_LEATHARMOR': 0x2C, 'UITYPE_BREASTPLATE': 0x2D, 'UITYPE_CAPE': 0x2E,
-                        'UITYPE_PLATEMAIL': 0x2F, 'UITYPE_FULLPLATE': 0x30, 'UITYPE_BUCKLER': 0x31,
-                        'UITYPE_SMALLSHIELD': 0x32, 'UITYPE_LARGESHIELD': 0x33, 'UITYPE_KITESHIELD': 0x34,
-                        'UITYPE_GOTHSHIELD': 0x35, 'UITYPE_RING': 0x36, 'UITYPE_55': 0x37, 'UITYPE_AMULET': 0x38,
-                        'UITYPE_SKCROWN': 0x39, 'UITYPE_INFRARING': 0x3A, 'UITYPE_OPTAMULET': 0x3B,
-                        'UITYPE_TRING': 0x3C, 'UITYPE_HARCREST': 0x3D, 'UITYPE_MAPOFDOOM': 0x3E, 'UITYPE_ELIXIR': 0x3F,
-                        'UITYPE_ARMOFVAL': 0x40, 'UITYPE_STEELVEIL': 0x41, 'UITYPE_GRISWOLD': 0x42,
-                        'UITYPE_LGTFORGE': 0x43, 'UITYPE_LAZSTAFF': 0x44, 'UITYPE_INVALID': -1}
+                        'UITYPE_PLATEMAIL': 0x2F,
+                        'UITYPE_FULLPLATE': 0x30, 'UITYPE_BUCKLER': 0x31, 'UITYPE_SMALLSHIELD': 0x32,
+                        'UITYPE_LARGESHIELD': 0x33, 'UITYPE_KITESHIELD': 0x34, 'UITYPE_GOTHSHIELD': 0x35,
+                        'UITYPE_RING': 0x36,
+                        'UITYPE_55': 0x37, 'UITYPE_AMULET': 0x38, 'UITYPE_SKCROWN': 0x39, 'UITYPE_INFRARING': 0x3A,
+                        'UITYPE_OPTAMULET': 0x3B, 'UITYPE_TRING': 0x3C, 'UITYPE_HARCREST': 0x3D,
+                        'UITYPE_MAPOFDOOM': 0x3E,
+                        'UITYPE_ELIXIR': 0x3F, 'UITYPE_ARMOFVAL': 0x40, 'UITYPE_STEELVEIL': 0x41,
+                        'UITYPE_GRISWOLD': 0x42,
+                        'UITYPE_LGTFORGE': 0x43, 'UITYPE_LAZSTAFF': 0x44, 'UITYPE_NUMSWORD': 102,
+                        'UITYPE_MAJAMULET': 103,
+                        'UITYPE_WARAXE': 104, 'UITYPE_HEAVYXBOW': 105, 'UITYPE_MALLORNBOW': 106, 'UITYPE_WARFLAIL': 107,
+                        'UITYPE_WARHELM': 108, 'UITYPE_NUMSHIELD': 109, 'UITYPE_ELVISHSBOW': 111,
+                        'UITYPE_MITHCHAINMAIL': 117,
+                        'UITYPE_ELVENBLADE': 118, 'UITYPE_MITHRILSHIELD': 119, 'UITYPE_ELVENBOW': 120,
+                        'UITYPE_MITHRILHELM': 121, 'UITYPE_MAJRING': 122, 'UITYPE_LESSRING': -128,
+                        'UITYPE_NORMRING': -127, 'UITYPE_LCAP': -111,
+                        'UITYPE_CHAINSHIRT': -112, 'UITYPE_FULLHELM': -109, 'UITYPE_SDSCALE': -107,
+                        'UITYPE_GREATFLAIL': -106,
+                        'UITYPE_SHBATTLEBOW': -104, 'UITYPE_DWARVENSHIELD': -64, 'UITYPE_LEATHERARMOR': -63,
+                        'UITYPE_MAGEROBE': -62, 'UITYPE_SCALEMAIL': -61, 'UITYPE_HAUBERK': -60,
+                        'UITYPE_DWARVENAXE': -59,
+                        'UITYPE_LONGKNIFE': -58, 'UITYPE_CSABRE': -57, 'UITYPE_WOODAXE': -56, 'UITYPE_SHWARBOW': -55,
+                        'UITYPE_MINRING': -54, 'UITYPE_INVALID': -1}
 
     mem_offset = 0x402200
     mem_start = 0x0008E448
@@ -725,10 +777,14 @@ def convert_item_data(m):
             convert_exclusive_flag(conv_dict["iRnd"], item_drop_rate),
             convert_exclusive_flag(conv_dict["iClass"], item_class),
             convert_exclusive_flag(conv_dict["iLoc"], item_equip_type),
-            convert_exclusive_flag(conv_dict["iCurs"], item_cursor_graphic) if convert_exclusive_flag(conv_dict["iCurs"], item_cursor_graphic) != "fail" else conv_dict["iCurs"],
-            item_type_conv[(convert_exclusive_flag(conv_dict["itype"],item_type))],
-            convert_exclusive_flag(conv_dict["iItemId"],unique_base_item) if convert_exclusive_flag(conv_dict["iItemId"],unique_base_item) != "fail" else conv_dict["iItemId"],
-            f'N_("{get_string(m, conv_dict["iName"] - mem_offset)}")'if conv_dict["iName"] != 0 else "nullptr",
+            convert_exclusive_flag(conv_dict["iCurs"], item_cursor_graphic) if convert_exclusive_flag(
+                conv_dict["iCurs"], item_cursor_graphic) != "fail" else conv_dict["iCurs"],
+            item_type_conv[(convert_exclusive_flag(conv_dict["itype"], item_type))],
+            convert_exclusive_flag(twos_complement(conv_dict["iItemId"], 8),
+                                   unique_base_item) if convert_exclusive_flag(twos_complement(conv_dict["iItemId"], 8),
+                                                                               unique_base_item) != "fail" else twos_complement(
+                conv_dict["iItemId"], 8),
+            f'N_("{get_string(m, conv_dict["iName"] - mem_offset)}")' if conv_dict["iName"] != 0 else "nullptr",
             f'N_("{get_string(m, conv_dict["isName"] - mem_offset)}")' if conv_dict["isName"] != 0 else "nullptr",
             conv_dict["iMinMLvl"],
             conv_dict["iDurability"],
@@ -739,18 +795,693 @@ def convert_item_data(m):
             conv_dict["iMinStr"],
             conv_dict["iMinMag"],
             conv_dict["iMinDex"],
-            convert_bit_flag(conv_dict["iFlags"], item_special_effect),
+            convert_bit_flag(conv_dict["iFlags"], item_special_effect) if convert_bit_flag(conv_dict["iFlags"],
+                                                                                           item_special_effect) != "" else "0",
             convert_exclusive_flag(conv_dict["iMiscId"], item_misc_id),
             convert_exclusive_flag(conv_dict["iSpell"], spell_id),
             "true" if conv_dict["iUsable"] != 0 else "false",
             conv_dict["iValue"],
         ]
         conv_table.append(conv_row)
+    actual_label_order = [
+        "iRnd",
+        "iClass",
+        "iLoc",
+        "iCurs",
+        "itype",
+        "iItemId",
+        "iName",
+        "isName",
+        "iMinMLvl",
+        "iDurability",
+        "iMinDam",
+        "iMaxDam",
+        "iMinAC",
+        "iMaxAC",
+        "iMinStr",
+        "iMinMag",
+        "iMinDex",
+        "iFlags",
+        "iMiscId",
+        "iSpell",
+        "iUsable",
+        "iValue",
+    ]
 
+    print("; ".join(actual_label_order))
     for row in conv_table:
         temp_string = "{"
         temp_row = [str(int) for int in row]
-        x = ", ".join(temp_row)
+        x = ",; ".join(temp_row)
+        temp_string += x
+        temp_string += "},"
+        print(temp_string)
+
+
+def get_item_from_array(value, array, fail_return):
+    if value < 0:
+        return fail_return
+    return array[value]
+
+
+def convert_unique_monsters(m):
+    mem_start = 0x0009A560
+    block_size = 32
+    block_count = 97
+
+    # data
+    package = [("mtype", 4), # 0-3
+               ("mName", 4),
+               ("mTrnName", 4),
+               ("mlevel", 2),
+               ("mmaxhp", 2),
+               ("mAi", 1),
+               ("mint", 1),
+               ("mMinDamage", 1),
+               ("mMaxDamage", 1),
+               ("mMagicRes", 2),
+               ("mUnqAttr", 2),
+               # ("mUnqVar1", 1),
+               # ("mUnqVar2", 1),
+               # ("padding", 2),
+               ("mUnqVar1", 1),
+               ("mlevelNorm", 1),
+               ("mlevelNM", 1),
+               ("mlevelHell", 1),
+               ("mtalkmsg", 4),
+               ]
+
+    speech_list = ["TEXT_NONE",
+                   "TEXT_KING1",
+                   "TEXT_KING2",
+                   "TEXT_KING3",
+                   "TEXT_KING4",
+                   "TEXT_KING5",
+                   "TEXT_KING6",
+                   "TEXT_KING7",
+                   "TEXT_KING8",
+                   "TEXT_KING9",
+                   "TEXT_KING10",
+                   "TEXT_KING11",
+                   "TEXT_BANNER1",
+                   "TEXT_BANNER2",
+                   "TEXT_BANNER3",
+                   "TEXT_BANNER4",
+                   "TEXT_BANNER5",
+                   "TEXT_BANNER6",
+                   "TEXT_BANNER7",
+                   "TEXT_BANNER8",
+                   "TEXT_BANNER9",
+                   "TEXT_BANNER10",
+                   "TEXT_BANNER11",
+                   "TEXT_BANNER12",
+                   "TEXT_VILE1",
+                   "TEXT_VILE2",
+                   "TEXT_VILE3",
+                   "TEXT_VILE4",
+                   "TEXT_VILE5",
+                   "TEXT_VILE6",
+                   "TEXT_VILE7",
+                   "TEXT_VILE8",
+                   "TEXT_VILE9",
+                   "TEXT_VILE10",
+                   "TEXT_VILE11",
+                   "TEXT_VILE12",
+                   "TEXT_VILE13",
+                   "TEXT_VILE14",
+                   "TEXT_POISON1",
+                   "TEXT_POISON2",
+                   "TEXT_POISON3",
+                   "TEXT_POISON4",
+                   "TEXT_POISON5",
+                   "TEXT_POISON6",
+                   "TEXT_POISON7",
+                   "TEXT_POISON8",
+                   "TEXT_POISON9",
+                   "TEXT_POISON10",
+                   "TEXT_BONE1",
+                   "TEXT_BONE2",
+                   "TEXT_BONE3",
+                   "TEXT_BONE4",
+                   "TEXT_BONE5",
+                   "TEXT_BONE6",
+                   "TEXT_BONE7",
+                   "TEXT_BONE8",
+                   "TEXT_BUTCH1",
+                   "TEXT_BUTCH2",
+                   "TEXT_BUTCH3",
+                   "TEXT_BUTCH4",
+                   "TEXT_BUTCH5",
+                   "TEXT_BUTCH6",
+                   "TEXT_BUTCH7",
+                   "TEXT_BUTCH8",
+                   "TEXT_BUTCH9",
+                   "TEXT_BUTCH10",
+                   "TEXT_BLIND1",
+                   "TEXT_BLIND2",
+                   "TEXT_BLIND3",
+                   "TEXT_BLIND4",
+                   "TEXT_BLIND5",
+                   "TEXT_BLIND6",
+                   "TEXT_BLIND7",
+                   "TEXT_BLIND8",
+                   "TEXT_VEIL1",
+                   "TEXT_VEIL2",
+                   "TEXT_VEIL3",
+                   "TEXT_VEIL4",
+                   "TEXT_VEIL5",
+                   "TEXT_VEIL6",
+                   "TEXT_VEIL7",
+                   "TEXT_VEIL8",
+                   "TEXT_VEIL9",
+                   "TEXT_VEIL10",
+                   "TEXT_VEIL11",
+                   "TEXT_ANVIL1",
+                   "TEXT_ANVIL2",
+                   "TEXT_ANVIL3",
+                   "TEXT_ANVIL4",
+                   "TEXT_ANVIL5",
+                   "TEXT_ANVIL6",
+                   "TEXT_ANVIL7",
+                   "TEXT_ANVIL8",
+                   "TEXT_ANVIL9",
+                   "TEXT_ANVIL10",
+                   "TEXT_BLOOD1",
+                   "TEXT_BLOOD2",
+                   "TEXT_BLOOD3",
+                   "TEXT_BLOOD4",
+                   "TEXT_BLOOD5",
+                   "TEXT_BLOOD6",
+                   "TEXT_BLOOD7",
+                   "TEXT_BLOOD8",
+                   "TEXT_WARLRD1",
+                   "TEXT_WARLRD2",
+                   "TEXT_WARLRD3",
+                   "TEXT_WARLRD4",
+                   "TEXT_WARLRD5",
+                   "TEXT_WARLRD6",
+                   "TEXT_WARLRD7",
+                   "TEXT_WARLRD8",
+                   "TEXT_WARLRD9",
+                   "TEXT_INFRA1",
+                   "TEXT_INFRA2",
+                   "TEXT_INFRA3",
+                   "TEXT_INFRA4",
+                   "TEXT_INFRA5",
+                   "TEXT_INFRA6",
+                   "TEXT_INFRA7",
+                   "TEXT_INFRA8",
+                   "TEXT_INFRA9",
+                   "TEXT_INFRA10",
+                   "TEXT_MUSH1",
+                   "TEXT_MUSH2",
+                   "TEXT_MUSH3",
+                   "TEXT_MUSH4",
+                   "TEXT_MUSH5",
+                   "TEXT_MUSH6",
+                   "TEXT_MUSH7",
+                   "TEXT_MUSH8",
+                   "TEXT_MUSH9",
+                   "TEXT_MUSH10",
+                   "TEXT_MUSH11",
+                   "TEXT_MUSH12",
+                   "TEXT_MUSH13",
+                   "TEXT_DOOM1",
+                   "TEXT_DOOM2",
+                   "TEXT_DOOM3",
+                   "TEXT_DOOM4",
+                   "TEXT_DOOM5",
+                   "TEXT_DOOM6",
+                   "TEXT_DOOM7",
+                   "TEXT_DOOM8",
+                   "TEXT_DOOM9",
+                   "TEXT_DOOM10",
+                   "TEXT_GARBUD1",
+                   "TEXT_GARBUD2",
+                   "TEXT_GARBUD3",
+                   "TEXT_GARBUD4",
+                   "TEXT_ZHAR1",
+                   "TEXT_ZHAR2",
+                   "TEXT_STORY1",
+                   "TEXT_STORY2",
+                   "TEXT_STORY3",
+                   "TEXT_STORY4",
+                   "TEXT_STORY5",
+                   "TEXT_STORY6",
+                   "TEXT_STORY7",
+                   "TEXT_STORY9",
+                   "TEXT_STORY10",
+                   "TEXT_STORY11",
+                   "TEXT_OGDEN1",
+                   "TEXT_OGDEN2",
+                   "TEXT_OGDEN3",
+                   "TEXT_OGDEN4",
+                   "TEXT_OGDEN5",
+                   "TEXT_OGDEN6",
+                   "TEXT_OGDEN8",
+                   "TEXT_OGDEN9",
+                   "TEXT_OGDEN10",
+                   "TEXT_PEPIN1",
+                   "TEXT_PEPIN2",
+                   "TEXT_PEPIN3",
+                   "TEXT_PEPIN4",
+                   "TEXT_PEPIN5",
+                   "TEXT_PEPIN6",
+                   "TEXT_PEPIN7",
+                   "TEXT_PEPIN9",
+                   "TEXT_PEPIN10",
+                   "TEXT_PEPIN11",
+                   "TEXT_GILLIAN1",
+                   "TEXT_GILLIAN2",
+                   "TEXT_GILLIAN3",
+                   "TEXT_GILLIAN4",
+                   "TEXT_GILLIAN5",
+                   "TEXT_GILLIAN6",
+                   "TEXT_GILLIAN7",
+                   "TEXT_GILLIAN9",
+                   "TEXT_GILLIAN10",
+                   "TEXT_GRISWOLD1",
+                   "TEXT_GRISWOLD2",
+                   "TEXT_GRISWOLD3",
+                   "TEXT_GRISWOLD4",
+                   "TEXT_GRISWOLD5",
+                   "TEXT_GRISWOLD6",
+                   "TEXT_GRISWOLD7",
+                   "TEXT_GRISWOLD8",
+                   "TEXT_GRISWOLD9",
+                   "TEXT_GRISWOLD10",
+                   "TEXT_GRISWOLD12",
+                   "TEXT_GRISWOLD13",
+                   "TEXT_FARNHAM1",
+                   "TEXT_FARNHAM2",
+                   "TEXT_FARNHAM3",
+                   "TEXT_FARNHAM4",
+                   "TEXT_FARNHAM5",
+                   "TEXT_FARNHAM6",
+                   "TEXT_FARNHAM8",
+                   "TEXT_FARNHAM9",
+                   "TEXT_FARNHAM10",
+                   "TEXT_FARNHAM11",
+                   "TEXT_FARNHAM12",
+                   "TEXT_FARNHAM13",
+                   "TEXT_ADRIA1",
+                   "TEXT_ADRIA2",
+                   "TEXT_ADRIA3",
+                   "TEXT_ADRIA4",
+                   "TEXT_ADRIA5",
+                   "TEXT_ADRIA6",
+                   "TEXT_ADRIA7",
+                   "TEXT_ADRIA8",
+                   "TEXT_ADRIA9",
+                   "TEXT_ADRIA10",
+                   "TEXT_ADRIA12",
+                   "TEXT_ADRIA13",
+                   "TEXT_WIRT1",
+                   "TEXT_WIRT2",
+                   "TEXT_WIRT3",
+                   "TEXT_WIRT4",
+                   "TEXT_WIRT5",
+                   "TEXT_WIRT6",
+                   "TEXT_WIRT7",
+                   "TEXT_WIRT8",
+                   "TEXT_WIRT9",
+                   "TEXT_WIRT11",
+                   "TEXT_WIRT12",
+                   "TEXT_BONER",
+                   "TEXT_BLOODY",
+                   "TEXT_BLINDING",
+                   "TEXT_BLOODWAR",
+                   "TEXT_MBONER",
+                   "TEXT_MBLOODY",
+                   "TEXT_MBLINDING",
+                   "TEXT_MBLOODWAR",
+                   "TEXT_RBONER",
+                   "TEXT_RBLOODY",
+                   "TEXT_RBLINDING",
+                   "TEXT_RBLOODWAR",
+                   "TEXT_COW1",
+                   "TEXT_COW2",
+                   "TEXT_BOOK11",
+                   "TEXT_BOOK12",
+                   "TEXT_BOOK13",
+                   "TEXT_BOOK21",
+                   "TEXT_BOOK22",
+                   "TEXT_BOOK23",
+                   "TEXT_BOOK31",
+                   "TEXT_BOOK32",
+                   "TEXT_BOOK33",
+                   "TEXT_INTRO",
+                   "TEXT_HBONER",
+                   "TEXT_HBLOODY",
+                   "TEXT_HBLINDING",
+                   "TEXT_HBLOODWAR",
+                   "TEXT_BBONER",
+                   "TEXT_BBLOODY",
+                   "TEXT_BBLINDING",
+                   "TEXT_BBLOODWAR",
+                   "TEXT_GRAVE1",
+                   "TEXT_GRAVE2",
+                   "TEXT_GRAVE3",
+                   "TEXT_GRAVE4",
+                   "TEXT_GRAVE5",
+                   "TEXT_GRAVE6",
+                   "TEXT_GRAVE7",
+                   "TEXT_GRAVE8",
+                   "TEXT_GRAVE9",
+                   "TEXT_GRAVE10",
+                   "TEXT_FARMER1",
+                   "TEXT_FARMER2",
+                   "TEXT_FARMER3",
+                   "TEXT_FARMER4",
+                   "TEXT_FARMER5",
+                   "TEXT_GIRL1",
+                   "TEXT_GIRL2",
+                   "TEXT_GIRL3",
+                   "TEXT_GIRL4",
+                   "TEXT_DEFILER1",
+                   "TEXT_DEFILER2",
+                   "TEXT_DEFILER3",
+                   "TEXT_DEFILER4",
+                   "TEXT_DEFILER5",
+                   "TEXT_NAKRUL1",
+                   "TEXT_NAKRUL2",
+                   "TEXT_NAKRUL3",
+                   "TEXT_NAKRUL4",
+                   "TEXT_NAKRUL5",
+                   "TEXT_CORNSTN",
+                   "TEXT_JERSEY1",
+                   "TEXT_JERSEY2",
+                   "TEXT_JERSEY3",
+                   "TEXT_JERSEY4",
+                   "TEXT_JERSEY5",
+                   "TEXT_JERSEY6",
+                   "TEXT_JERSEY7",
+                   "TEXT_JERSEY8",
+                   "TEXT_JERSEY9",
+                   "TEXT_TRADER",
+                   "TEXT_FARMER6",
+                   "TEXT_FARMER7",
+                   "TEXT_FARMER8",
+                   "TEXT_FARMER9",
+                   "TEXT_FARMER10",
+                   "TEXT_JERSEY10",
+                   "TEXT_JERSEY11",
+                   "TEXT_JERSEY12",
+                   "TEXT_JERSEY13",
+                   "TEXT_SKLJRN",
+                   "TEXT_BOOK4",
+                   "TEXT_BOOK5",
+                   "TEXT_BOOK6",
+                   "TEXT_BOOK7",
+                   "TEXT_BOOK8",
+                   "TEXT_BOOK9",
+                   "TEXT_BOOKA",
+                   "TEXT_BOOKB",
+                   "TEXT_BOOKC",
+                   "TEXT_OBOOKA",
+                   "TEXT_OBOOKB",
+                   "TEXT_OBOOKC",
+                   "TEXT_MBOOKA",
+                   "TEXT_MBOOKB",
+                   "TEXT_MBOOKC",
+                   "TEXT_RBOOKA",
+                   "TEXT_RBOOKB",
+                   "TEXT_RBOOKC",
+                   "TEXT_BBOOKA",
+                   "TEXT_BBOOKB",
+                   "TEXT_BBOOKC", ]
+
+    mtype_list = [
+        "MT_NZOMBIE",
+        "MT_BZOMBIE",
+        "MT_GZOMBIE",
+        "MT_YZOMBIE",
+        "MT_RFALLSP",
+        "MT_DFALLSP",
+        "MT_YFALLSP",
+        "MT_BFALLSP",
+        "MT_WSKELAX",
+        "MT_TSKELAX",
+        "MT_RSKELAX",
+        "MT_XSKELAX",
+        "MT_RFALLSD",
+        "MT_DFALLSD",
+        "MT_YFALLSD",
+        "MT_BFALLSD",
+        "MT_NSCAV",
+        "MT_BSCAV",
+        "MT_WSCAV",
+        "MT_YSCAV",
+        "MT_WSKELBW",
+        "MT_TSKELBW",
+        "MT_RSKELBW",
+        "MT_XSKELBW",
+        "MT_WSKELSD",
+        "MT_TSKELSD",
+        "MT_RSKELSD",
+        "MT_XSKELSD",
+        "MT_INVILORD",
+        "MT_SNEAK",
+        "MT_STALKER",
+        "MT_UNSEEN",
+        "MT_ILLWEAV",
+        "MT_LRDSAYTR",
+        "MT_NGOATMC",
+        "MT_BGOATMC",
+        "MT_RGOATMC",
+        "MT_GGOATMC",
+        "MT_FIEND",
+        "MT_BLINK",
+        "MT_GLOOM",
+        "MT_FAMILIAR",
+        "MT_NGOATBW",
+        "MT_BGOATBW",
+        "MT_RGOATBW",
+        "MT_GGOATBW",
+        "MT_NACID",
+        "MT_RACID",
+        "MT_BACID",
+        "MT_XACID",
+        "MT_SKING",
+        "MT_CLEAVER",
+        "MT_FAT",
+        "MT_MUDMAN",
+        "MT_TOAD",
+        "MT_FLAYED",
+        "MT_WYRM",
+        "MT_CAVSLUG",
+        "MT_DVLWYRM",
+        "MT_DEVOUR",
+        "MT_NMAGMA",
+        "MT_YMAGMA",
+        "MT_BMAGMA",
+        "MT_WMAGMA",
+        "MT_HORNED",
+        "MT_MUDRUN",
+        "MT_FROSTC",
+        "MT_OBLORD",
+        "MT_BONEDMN",
+        "MT_REDDTH",
+        "MT_LTCHDMN",
+        "MT_UDEDBLRG",
+        "MT_INCIN",
+        "MT_FLAMLRD",
+        "MT_DOOMFIRE",
+        "MT_HELLBURN",
+        "MT_STORM",
+        "MT_RSTORM",
+        "MT_STORML",
+        "MT_MAEL",
+        "MT_BIGFALL",
+        "MT_WINGED",
+        "MT_GARGOYLE",
+        "MT_BLOODCLW",
+        "MT_DEATHW",
+        "MT_MEGA",
+        "MT_GUARD",
+        "MT_VTEXLRD",
+        "MT_BALROG",
+        "MT_NSNAKE",
+        "MT_RSNAKE",
+        "MT_BSNAKE",
+        "MT_GSNAKE",
+        "MT_NBLACK",
+        "MT_RTBLACK",
+        "MT_BTBLACK",
+        "MT_RBLACK",
+        "MT_UNRAV",
+        "MT_HOLOWONE",
+        "MT_PAINMSTR",
+        "MT_REALWEAV",
+        "MT_SUCCUBUS",
+        "MT_SNOWWICH",
+        "MT_HLSPWN",
+        "MT_SOLBRNR",
+        "MT_COUNSLR",
+        "MT_MAGISTR",
+        "MT_CABALIST",
+        "MT_ADVOCATE",
+        "MT_GOLEM",
+        "MT_DIABLO",
+        "MT_DARKMAGE",
+        "MT_HELLBOAR",
+        "MT_STINGER",
+        "MT_PSYCHORB",
+        "MT_ARACHNON",
+        "MT_FELLTWIN",
+        "MT_HORKSPWN",
+        "MT_VENMTAIL",
+        "MT_NECRMORB",
+        "MT_SPIDLORD",
+        "MT_LASHWORM",
+        "MT_TORCHANT",
+        "MT_HORKDMN",
+        "MT_DEFILER",
+        "MT_GRAVEDIG",
+        "MT_TOMBRAT",
+        "MT_FIREBAT",
+        "MT_SKLWING",
+        "MT_LICH",
+        "MT_CRYPTDMN",
+        "MT_HELLBAT",
+        "MT_BONEDEMN",
+        "MT_ARCHLICH",
+        "MT_BICLOPS",
+        "MT_FLESTHNG",
+        "MT_REAPER",
+        "MT_NAKRUL",
+        "NUM_MTYPES",
+        # MT_INVALID = -1,
+    ]
+
+    monster_ai_list = [
+        "AI_ZOMBIE",
+        "AI_FAT",
+        "AI_SKELSD",
+        "AI_SKELBOW",
+        "AI_SCAV",
+        "AI_RHINO",
+        "AI_GOATMC",
+        "AI_GOATBOW",
+        "AI_FALLEN",
+        "AI_MAGMA",
+        "AI_SKELKING",
+        "AI_BAT",
+        "AI_GARG",
+        "AI_CLEAVER",
+        "AI_SUCC",
+        "AI_SNEAK",
+        "AI_STORM",
+        "AI_FIREMAN",
+        "AI_GARBUD",
+        "AI_ACID",
+        "AI_ACIDUNIQ",
+        "AI_GOLUM",
+        "AI_ZHAR",
+        "AI_SNOTSPIL",
+        "AI_SNAKE",
+        "AI_COUNSLR",
+        "AI_MEGA",
+        "AI_DIABLO",
+        "AI_LAZARUS",
+        "AI_LAZHELP",
+        "AI_LACHDAN",
+        "AI_WARLORD",
+        "AI_FIREBAT",
+        "AI_TORCHANT",
+        "AI_HORKDMN",
+        "AI_LICH",
+        "AI_ARCHLICH",
+        "AI_PSYCHORB",
+        "AI_NECROMORB",
+        "AI_BONEDEMON",
+        # "AI_INVALID" = -1
+    ]
+
+    mem_offset = 0x402200
+
+    conv_dict = {}
+    conv_table = []
+    for mem_address in range(mem_start, mem_start + block_size * block_count, block_size):
+        conv_dict.clear()
+        cur_address = mem_address
+        # pull memory info for single affix
+        for name, length in package:
+            conv_dict[name] = get_value(m, cur_address, length)
+            cur_address = cur_address + length
+        # place memory info in correct order for row
+        conv_row = [
+            get_item_from_array(twos_complement(conv_dict["mtype"],32), mtype_list, "MT_INVALID"),
+            f'P_("monster", "{get_string(m, conv_dict["mName"] - mem_offset)}")',
+            f'"{get_string(m, conv_dict["mTrnName"]-mem_offset)}"',
+            conv_dict["mlevel"],
+            conv_dict["mmaxhp"],
+            monster_ai_list[conv_dict["mAi"]],
+            conv_dict["mint"],
+            conv_dict["mMinDamage"],
+            conv_dict["mMaxDamage"],
+            get_resists(conv_dict["mMagicRes"]),
+            conv_dict["mUnqAttr"],
+            # conv_dict["mUnqVar1"],
+            # conv_dict["mUnqVar2"],
+            (conv_dict["mUnqVar1"]),
+            (conv_dict["mlevelNorm"]),
+            (conv_dict["mlevelNM"]),
+            (conv_dict["mlevelHell"]),
+            speech_list[conv_dict["mtalkmsg"]]
+        ]
+        # need some additional logic to put the rest of this together
+        pack_value = conv_dict["mUnqAttr"]
+        pack_string = "UniqueMonsterPack::"
+        if (pack_value & 0b0001) != 0:
+            if (pack_value & 0b0010) != 0:
+                pack_string += "Leashed"
+            else:
+                pack_string += "Independent"
+        else:
+            pack_string += "None"
+
+        customToHit = 0
+        # Unique Attribute is To Hit modifier
+        if (pack_value & 0b0100) != 0:
+            customToHit = conv_dict["mUnqVar1"]
+
+        customArmorClass = 0
+        # Unique Attribute is Armor Modifier
+        if (pack_value & 0b1000) != 0:
+            customArmorClass = conv_dict["mUnqVar1"]
+
+        conv_table.append(conv_row)
+    actual_label_order = [
+        "iRnd",
+        "iClass",
+        "iLoc",
+        "iCurs",
+        "itype",
+        "iItemId",
+        "iName",
+        "isName",
+        "iMinMLvl",
+        "iDurability",
+        "iMinDam",
+        "iMaxDam",
+        "iMinAC",
+        "iMaxAC",
+        "iMinStr",
+        "iMinMag",
+        "iMinDex",
+        "iFlags",
+        "iMiscId",
+        "iSpell",
+        "iUsable",
+        "iValue",
+    ]
+
+    print("; ".join(actual_label_order))
+    for row in conv_table:
+        temp_string = "{"
+        temp_row = [str(int) for int in row]
+        x = ",; ".join(temp_row)
         temp_string += x
         temp_string += "},"
         print(temp_string)
@@ -765,7 +1496,8 @@ def main():
     # convert_monster_data(m)
     # convert_affix_data(m)
     # convert_unique_data(m)
-    convert_item_data(m)
+    # convert_item_data(m)
+    convert_unique_monsters(m)
 
 
 # Press the green button in the gutter to run the script.
